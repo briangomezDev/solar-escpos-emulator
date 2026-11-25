@@ -19,10 +19,25 @@ export interface Barcode {
   heightDots: number;      // GS h
 }
 
+export type ImageKind = 'raster' | 'bit-image' | 'nv-image' | 'download-image' | 'graphics' | 'qr';
+
+export interface ReceiptImage {
+  /** Command that printed it: GS v 0 'raster', ESC * 'bit-image', FS p / GS ( L fn 69 'nv-image', GS / and
+   * GS ( L fn 85 'download-image', GS ( L fn 50 'graphics', GS ( k 'qr' */
+  kind: ImageKind;
+  widthDots: number;
+  heightDots: number;
+  /** Base64 of the packed bits: row by row, MSB first, ceil(widthDots / 8) bytes per row, 1 = black */
+  data: string;
+  /** QR only: the data the symbol encodes */
+  text?: string;
+}
+
 export interface ReceiptLine {
-  segments: TextSegment[];
+  segments: TextSegment[];  // empty on a barcode or image line
   align: Alignment;
   barcode?: Barcode;
+  image?: ReceiptImage;
 }
 
 export interface Receipt {

@@ -1,16 +1,20 @@
 {
-  "name": "escpos-emulator",
-  "version": "0.3.0",
-  "description": "ESC/POS thermal receipt printer emulator with live HTML preview and REST API for testing",
+  "name": "solar-escpos-emulator",
+  "version": "0.4.0",
+  "description": "ESC/POS thermal receipt printer emulator with live HTML preview and REST API for testing — fork of escpos-emulator with 2Connect POS-80 profile, images/logos and QR codes",
   "license": "MIT",
   "author": "lezram",
+  "contributors": [
+    "Brian Gomez (https://github.com/briangomezDev)"
+  ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/lezram/escpos-emulator.git"
+    "url": "https://github.com/briangomezDev/solar-escpos-emulator.git"
   },
   "type": "module",
   "main": "dist/index.js",
   "bin": {
+    "solar-escpos-emulator": "dist/index.js",
     "escpos-emulator": "dist/index.js"
   },
   "scripts": {
@@ -18,12 +22,14 @@
     "build": "tsc && cp -r src/html dist/html",
     "start": "node dist/index.js",
     "test-print": "tsx test-print.ts",
+    "test": "tsx --test test/*.test.ts",
     "prepublishOnly": "npm run build"
   },
   "files": [
     "dist"
   ],
   "dependencies": {
+    "qrcode-generator": "2.0.4",
     "ws": "8.21.0"
   },
   "devDependencies": {
@@ -40,7 +46,11 @@
     "emulator",
     "thermal",
     "epson",
-    "tm-m30"
+    "tm-m30",
+    "2connect",
+    "pos-80",
+    "qr",
+    "logo"
   ],
   "engines": {
     "node": ">=18"

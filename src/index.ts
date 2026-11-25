@@ -35,7 +35,8 @@ const printerInstances: PrinterInstance[] = configs.map(cfg => {
   console.log(`[escpos-emulator] Printer "${cfg.name}" (${cfg.id}) — ${model.vendor} ${model.name}, TCP port ${cfg.tcpPort}`);
   const store = new ReceiptStore();
   const { state } = createTcpServer(model, store, cfg.tcpPort);
-  return { id: cfg.id, name: cfg.name, tcpPort: cfg.tcpPort, store, state };
+  const modelInfo = { name: model.name, vendor: model.vendor, paperWidthMm: model.paperWidthMm, dpi: model.dpi };
+  return { id: cfg.id, name: cfg.name, tcpPort: cfg.tcpPort, model: modelInfo, store, state };
 });
 
 createHttpServer(printerInstances, HTTP_PORT);

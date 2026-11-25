@@ -1,6 +1,21 @@
-[![npm version](https://img.shields.io/npm/v/escpos-emulator.svg)](https://www.npmjs.com/package/escpos-emulator)
+# solar-escpos-emulator
 
-# escpos-emulator
+> Fork of [lezram/escpos-emulator](https://github.com/lezram/escpos-emulator) (MIT) that adds a **2Connect POS-80** printer
+> profile and renders **images (company logos)** and **QR codes**. All credit for the original emulator goes to lezram;
+> this fork is distributed under the same MIT license (see [LICENSE](./LICENSE)).
+
+### What this fork adds
+
+- **2Connect 2C-POS80 profile** (`PRINTER_MODEL=2C-POS80`, aliases `POS-80`, `2CONNECT-POS80`, `2C-POS80-01`,
+  `2C-POS80-02`): 80 mm paper, 203 dpi, 576-dot print head, Font A 12×24 (48 columns), Font B 9×17 (64 columns),
+  PC437 code page after `ESC @`, as in the 2Connect datasheets (2C-POS80-01-V6/V7, 2C-POS80-02).
+- **Images / logos**, drawn dot for dot in the preview and returned in the API:
+  `GS v 0` raster images, `ESC *` bit-image bands (joined into one logo), NV logos stored with `FS q` and printed with
+  `FS p` (kept across connections, like the printer's flash), `GS *` / `GS /` downloaded images, and the Epson
+  graphics commands `GS ( L` / `GS 8 L` (fn 112/50 print buffer, fn 67/69 NV graphics, fn 83/85 download graphics).
+- **QR codes** with `GS ( k` (model, module size 1–16, error correction L/M/Q/H, store, print). PDF417 shows its data
+  as text.
+- `npm test` with unit tests for the new commands.
 
 ![ESC/POS Emulator](./assets/escpos_emulator.jpg)
 
@@ -11,7 +26,7 @@ A lightweight ESC/POS thermal receipt printer emulator for development and testi
 - **WebSocket** — real-time updates pushed to connected browsers
 - **Multiple printers** — run several virtual printers on different TCP ports, each with its own receipt view
 
-Currently emulates an **Epson TM-M30III** (80mm paper, Font A: 42 chars/line, Font B: 56 chars/line).
+Emulates an **Epson TM-M30III** (default) or a **2Connect POS-80** (80mm paper, Font A: 48 chars/line, Font B: 64 chars/line).
 
 ## Quick Use
 
@@ -69,7 +84,7 @@ Sends a sample formatted receipt to verify the emulator works.
 |----------|---------|-------------|
 | `TCP_PORT` | `9100` | Port the virtual printer listens on |
 | `HTTP_PORT` | `3000` | Port for web UI and REST API |
-| `PRINTER_MODEL` | `TM-M30III` | Printer model to emulate |
+| `PRINTER_MODEL` | `TM-M30III` | Printer model to emulate: `TM-M30III` or `2C-POS80` (alias `POS-80`) |
 | `PRINTER_NAME` | `Printer` | Display name shown in the UI |
 
 ### Multiple printers
@@ -80,7 +95,7 @@ Set `PRINTERS` to a JSON array. Each entry defines one virtual printer. When `PR
 PRINTERS='[
   {"id":"counter", "name":"Counter",  "tcpPort":9100},
   {"id":"kitchen", "name":"Kitchen",  "tcpPort":9101},
-  {"id":"bar",     "name":"Bar",      "tcpPort":9102, "model":"TM-M30III"}
+  {"id":"bar",     "name":"Bar",      "tcpPort":9102, "model":"POS-80"}
 ]' escpos-emulator
 ```
 
@@ -89,7 +104,7 @@ PRINTERS='[
 | `id` | yes | Unique identifier used in API paths |
 | `name` | yes | Display name shown in the UI tab |
 | `tcpPort` | yes | TCP port this printer listens on |
-| `model` | no | Printer model (default: `TM-M30III`) |
+| `model` | no | Printer model (default: `TM-M30III`; `2C-POS80` / `POS-80` for the 2Connect) |
 
 The web UI shows a tab per printer. Selecting a tab switches the receipt list and the online/offline toggle to that printer.
 
@@ -130,14 +145,20 @@ Replace `:id` with the printer `id` from the config.
 | ESC d | `1B 64 n` | Feed n lines |
 | ESC t | `1B 74 n` | Select code table (0 PC437, 2 PC850, 3 PC860, 4 PC863, 5 PC865, 16 WPC1252, 17 PC866, 18 PC852, 19 PC858, 40 ISO 8859-15; ISO 8859-15 until one is selected) |
 | ESC p | `1B 70 m t1 t2` | Cash drawer pulse |
+| ESC * | `1B 2A m nL nH d...` | Bit image band (8/24 dots, single/double density); consecutive bands form one image |
+| FS q | `1C 71 n [xL xH yL yH d...]...` | Define NV bit images (logos), kept while the emulator runs |
+| FS p | `1C 70 n m` | Print NV bit image n (m: normal / double width / double height / quadruple) |
+| GS * | `1D 2A x y d...` | Define downloaded bit image |
+| GS / | `1D 2F m` | Print downloaded bit image |
 | GS ! | `1D 21 n` | Character size (width/height multiplier) |
 | GS B | `1D 42 n` | Reverse print on/off |
 | GS V | `1D 56 m` | Paper cut |
 | GS L | `1D 4C nL nH` | Left margin (skipped) |
 | GS P | `1D 50 x y` | Motion units (skipped) |
 | GS W | `1D 57 nL nH` | Print area width: sets the paper width in the preview, text wraps at it |
-| GS v 0 | `1D 76 30 ...` | Raster bit image (skipped) |
-| GS ( k | `1D 28 6B ...` | 2D codes / QR (skipped) |
+| GS v 0 | `1D 76 30 m xL xH yL yH d...` | Raster bit image (logos), cut at the print area |
+| GS ( L / GS 8 L | `1D 28 4C ...` / `1D 38 4C ...` | Graphics: print buffer (fn 112 + fn 50), NV graphics (fn 67 / 69), download graphics (fn 83 / 85) |
+| GS ( k | `1D 28 6B ...` | QR Code (cn 49: fn 65 model, 67 module size, 69 error correction, 80 store, 81 print); PDF417 shown as text |
 | GS k | `1D 6B m ...` | Barcode: CODE128 (`m` = 73) is drawn, and not printed when wider than the print area; other symbologies show their data as text |
 | GS H | `1D 48 n` | Barcode HRI position (none/above/below/both) |
 | GS f | `1D 66 n` | Barcode HRI font |
@@ -176,6 +197,21 @@ POS App ──TCP:9101──► EscPosParser ──► ReceiptStore (printer 2) 
 POS App ──TCP:910N──► EscPosParser ──► ReceiptStore (printer N) ──┘
 ```
 
+## Images in the API
+
+A line that holds an image carries an `image` object instead of text segments:
+
+```json
+{ "segments": [], "align": "center",
+  "image": { "kind": "qr", "widthDots": 174, "heightDots": 174, "data": "<base64>", "text": "https://..." } }
+```
+
+`kind` is `raster` (GS v 0), `bit-image` (ESC *), `nv-image` (FS p, GS ( L fn 69), `download-image` (GS /, fn 85),
+`graphics` (GS ( L fn 50) or `qr`. `data` is the base64 of the packed bits: row by row, MSB first,
+`ceil(widthDots / 8)` bytes per row, 1 = black dot. QR images also carry the encoded `text`.
+
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE). Original work © lezram ([escpos-emulator](https://github.com/lezram/escpos-emulator));
+fork modifications © Brian Gomez. QR encoding uses [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator)
+(MIT, © Kazuhiko Arase).

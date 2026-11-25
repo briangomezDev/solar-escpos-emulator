@@ -15,6 +15,7 @@ export interface PrinterInstance {
   id: string;
   name: string;
   tcpPort: number;
+  model: { name: string; vendor: string; paperWidthMm: number; dpi: number };
   store: ReceiptStore;
   state: PrinterState;
 }
@@ -55,7 +56,7 @@ export function createHttpServer(printers: PrinterInstance[], port: number): htt
     }
 
     if (url.pathname === '/api/printers' && method === 'GET') {
-      json(res, printers.map(p => ({ id: p.id, name: p.name, tcpPort: p.tcpPort, enabled: p.state.enabled })));
+      json(res, printers.map(p => ({ id: p.id, name: p.name, tcpPort: p.tcpPort, model: p.model, enabled: p.state.enabled })));
       return;
     }
 

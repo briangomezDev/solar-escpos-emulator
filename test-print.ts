@@ -20,6 +20,39 @@ function text(str: string): Buffer {
   return Buffer.from(str, 'latin1');
 }
 
+// GS v 0 0 xL xH yL yH d1...dk: raster image, one bit per dot, rows of ceil(width / 8) bytes
+function rasterImage(width: number, height: number, isBlack: (x: number, y: number) => boolean): Buffer {
+  const rowBytes = Math.ceil(width / 8);
+  const data = Buffer.alloc(rowBytes * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) if (isBlack(x, y)) data[y * rowBytes + (x >> 3)] |= 0x80 >> (x & 7);
+  }
+  return Buffer.concat([cmd(GS, 0x76, 0x30, 0, rowBytes & 0xff, rowBytes >> 8, height & 0xff, height >> 8), data]);
+}
+
+// A sample company logo: a sun (disc and rays), 160 x 120 dots
+function sampleLogo(): Buffer {
+  const cx = 80, cy = 60;
+  return rasterImage(160, 120, (x, y) => {
+    const dx = x - cx, dy = y - cy, r = Math.hypot(dx, dy);
+    if (r <= 28) return true;
+    const ray = Math.abs(((Math.atan2(dy, dx) / (Math.PI / 6)) % 1 + 1) % 1 - 0.5) < 0.12;
+    return ray && r >= 36 && r <= 58;
+  });
+}
+
+// GS ( k: QR code model 2, module size, error correction, store data, print
+function qrCode(data: Buffer, moduleSize = 6, ecc = 49 /* M */): Buffer {
+  const store = data.length + 3;
+  return Buffer.concat([
+    cmd(GS, 0x28, 0x6b, 4, 0, 49, 65, 50, 0),
+    cmd(GS, 0x28, 0x6b, 3, 0, 49, 67, moduleSize),
+    cmd(GS, 0x28, 0x6b, 3, 0, 49, 69, ecc),
+    cmd(GS, 0x28, 0x6b, store & 0xff, store >> 8, 49, 80, 48), data,
+    cmd(GS, 0x28, 0x6b, 3, 0, 49, 81, 48),
+  ]);
+}
+
 // GS k 73 n d1...dn: CODE128, the data starts with a {A / {B / {C code set selector
 function code128(data: Buffer): Buffer {
   return Buffer.concat([cmd(GS, 0x6b, 73, data.length), data]);
@@ -39,6 +72,7 @@ const socket = net.createConnection({ host: HOST, port: PORT }, () => {
 
   // --- Header (centered, bold, double size) ---
   send(cmd(ESC, 0x61, 1));           // Center
+  send(sampleLogo());                // Company logo (GS v 0)
   send(cmd(ESC, 0x45, 1));           // Bold ON
   send(cmd(GS, 0x21, 0x11));         // Double width + double height
   send(text('CAFE RECEIPT'), cmd(LF));
@@ -110,6 +144,11 @@ const socket = net.createConnection({ host: HOST, port: PORT }, () => {
   send(code128(Buffer.concat([text('{BNo.{C'), cmd(20, 26)])), cmd(LF));   // Switch from B to C: "No.2026"
   send(cmd(GS, 0x77, 3));            // Module width: 3 dots
   send(code128(text('{BABCDEFGHIJKLMNOP')), cmd(LF));                       // 211 modules x 3 = 633 dots, wider than 576: not printed
+
+  // --- QR code (GS ( k), centered ---
+  send(cmd(ESC, 0x61, 1));
+  send(qrCode(text('https://example.com/receipt/CAFE-123')), cmd(LF));
+  send(text('Scan for your e-receipt'), cmd(LF));
 
   // Feed and cut
   send(cmd(ESC, 0x64, 3));           // Feed 3 lines
