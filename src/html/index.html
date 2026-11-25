@@ -106,6 +106,9 @@ body { font-family: system-ui, sans-serif; display: flex; height: 100vh; backgro
   overflow-x: hidden; width: 48ch; box-sizing: content-box;
 }
 #receipt-paper .barcode { display: block; margin: 0.3em 0; }
+/* Images (logos, QR codes) are drawn dot for dot at the scale of the text, see renderImage */
+#receipt-paper .image { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+#receipt-paper .line.image-line { min-height: 0; }
 #receipt-paper .line { min-height: 1.4em; display: flex; flex-wrap: nowrap; align-items: baseline; }
 #receipt-paper .line.center { justify-content: center; }
 #receipt-paper .line.right { justify-content: flex-end; }
@@ -147,8 +150,9 @@ body { font-family: system-ui, sans-serif; display: flex; height: 100vh; backgro
     <button id="clear-btn" onclick="clearReceipts()">Clear All</button>
   </div>
   <div id="repo-links">
-    <a href="https://github.com/lezram/escpos-emulator" target="_blank">GitHub</a>
-    <a href="https://github.com/lezram/escpos-emulator/issues" target="_blank">Report issue</a>
+    <a href="https://github.com/briangomezDev/solar-escpos-emulator" target="_blank">GitHub</a>
+    <a href="https://github.com/briangomezDev/solar-escpos-emulator/issues" target="_blank">Report issue</a>
+    <a href="https://github.com/lezram/escpos-emulator" target="_blank">Upstream</a>
   </div>
 </div>
 
@@ -471,7 +475,10 @@ function renderReceipt(receipt, printer) {
     if (line.align === 'center') div.classList.add('center');
     if (line.align === 'right') div.classList.add('right');
     const segments = line.segments || [];
-    if (line.barcode) {
+    if (line.image) {
+      div.classList.add('image-line');
+      div.appendChild(renderImage(line.image));
+    } else if (line.barcode) {
       div.appendChild(renderBarcode(line.barcode));
     } else if (segments.length === 0 || (segments.length === 1 && !segments[0].text)) {
       div.innerHTML = ' ';
@@ -550,12 +557,40 @@ function renderBarcode(barcode) {
   return svg;
 }
 
+// Draws a printed image (GS v 0, ESC *, NV logos, QR codes) dot for dot: the packed rows go into a canvas as large as
+// the image in dots, shown at EM_PER_DOT so a 576-dot logo spans the paper exactly like 48 Font A characters.
+function renderImage(image) {
+  const canvas = document.createElement('canvas');
+  canvas.className = 'image';
+  canvas.width = Math.max(1, image.widthDots);
+  canvas.height = Math.max(1, image.heightDots);
+  canvas.style.width = (image.widthDots * EM_PER_DOT) + 'em';
+  canvas.style.height = (image.heightDots * EM_PER_DOT) + 'em';
+  if (image.text) canvas.title = image.text;
+  canvas.dataset.kind = image.kind;
+  const ctx = canvas.getContext('2d');
+  const pixels = ctx.createImageData(canvas.width, canvas.height);
+  const bin = atob(image.data);
+  const rowBytes = Math.ceil(image.widthDots / 8);
+  for (let y = 0; y < image.heightDots; y++) {
+    for (let x = 0; x < image.widthDots; x++) {
+      const black = bin.charCodeAt(y * rowBytes + (x >> 3)) & (0x80 >> (x & 7));
+      const i = (y * canvas.width + x) * 4;
+      const v = black ? 0 : 255;
+      pixels.data[i] = pixels.data[i + 1] = pixels.data[i + 2] = v;
+      pixels.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(pixels, 0, 0);
+  return canvas;
+}
+
 function clearOrigin() {
   document.getElementById('receipt-origin').innerHTML = '';
 }
 
 function isBlankLine(line) {
-  if (line.barcode) return false;
+  if (line.barcode || line.image) return false;
   const segs = line.segments || [];
   if (segs.length === 0) return true;
   return segs.every(s => !s.text || !s.text.trim());

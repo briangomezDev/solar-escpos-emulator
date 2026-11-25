@@ -2,6 +2,7 @@ import net from 'node:net';
 import { EscPosParser } from './escpos-parser.js';
 import { type PrinterModel } from './printer-model.js';
 import { type ReceiptStore } from './receipt-store.js';
+import { ImageMemory } from './image-memory.js';
 
 export interface PrinterState {
   enabled: boolean;
@@ -9,6 +10,8 @@ export interface PrinterState {
 }
 
 export function createTcpServer(model: PrinterModel, store: ReceiptStore, port: number): { server: net.Server; state: PrinterState } {
+  // NV images (logos stored with FS q / GS ( L) outlive the connection that stored them, as on the printer
+  const memory = new ImageMemory();
   const server = net.createServer((socket) => {
     const remote = `${socket.remoteAddress}:${socket.remotePort}`;
     console.log(`[tcp] Connection from ${remote}`);
@@ -16,7 +19,7 @@ export function createTcpServer(model: PrinterModel, store: ReceiptStore, port: 
     const parser = new EscPosParser(model, (receipt) => {
       store.add(receipt);
       console.log(`[tcp] Receipt ${receipt.id} (${receipt.lines.length} lines) from ${remote}`);
-    });
+    }, memory);
 
     socket.on('data', (data) => {
       parser.process(data);

@@ -31,6 +31,9 @@ src/
 ├── escpos-parser.ts    # Core: byte-stream state machine → Receipt
 ├── code-tables.ts      # Upper half (0x80–0xFF) of the code tables selectable with ESC t
 ├── code128.ts          # CODE128 encoder for GS k 73 data ({A/{B/{C code sets) → bar modules
+├── raster.ts           # 1-bit bitmaps: raster/column data, scaling, cropping, stacking
+├── qr.ts               # GS ( k QR data → bitmap (qrcode-generator)
+├── image-memory.ts     # NV images per printer (FS q, GS ( L fn 67)
 ├── receipt-store.ts    # In-memory store (max 100, EventEmitter)
 ├── tcp-server.ts       # net.Server on port 9100, one parser per connection
 ├── http-server.ts      # HTTP routes + WebSocket broadcast
@@ -38,8 +41,17 @@ src/
 ```
 
 - **No Express** — uses native `http` module
-- **Single runtime dep** — `ws` for WebSocket
+- **Runtime deps** — `ws` for WebSocket, `qrcode-generator` for QR codes
 - ESM modules (`"type": "module"`), TypeScript strict mode, ES2022 target
+
+## Changes from upstream
+
+See `CHANGELOG.md` (Spanish) for everything this fork changed from lezram/escpos-emulator 0.3.0.
+
+## Printer models
+
+`PRINTER_MODEL=TM-M30III` (default) or `2C-POS80` (aliases `POS-80`, `2CONNECT-POS80`): 2Connect 2C-POS80 series,
+80 mm, 203 dpi, 576 dots, Font A 12×24 / Font B 9×17, PC437 after ESC @ (`defaultCodeTable: 0`).
 
 ## Target Printer: Epson TM-M30III
 
@@ -186,14 +198,16 @@ Lines with ESC $ positioning are forced to `align: 'left'` (spacing handles layo
 - **Paper reduction**: HTML viewer has a toggle to hide whitespace-only lines (Dart lib emits `emptyLines()` between rows)
 - **Print area**: the parser tracks the GS W print area (default: a full Font A line of the model, 576 dots) in dots — a character that does not fit goes to the next line, ESC $ positions past it are ignored, and each receipt carries it as `printAreaDots`
 - **Paper width**: the viewer paper is `printAreaDots / 12` ch wide (one Font A cell = 12 dots = 1ch), so a 58 mm layout (GS W 420) previews at 35 columns and centering lands where it does on paper; Font B is drawn at 9/12 of Font A, GS ! height scales the font and a different width multiplier stretches the glyphs horizontally
-- **Barcodes**: CODE128 is encoded in the parser and drawn by the viewer as an SVG at 0.05em per dot (the scale of a 12-dot Font A cell), with HRI text as ordinary lines above/below; no image rendering, GS v 0 emits a `[IMAGE]` placeholder
+- **Barcodes**: CODE128 is encoded in the parser and drawn by the viewer as an SVG at 0.05em per dot (the scale of a 12-dot Font A cell), with HRI text as ordinary lines above/below
+- **Images and QR codes** (`raster.ts`, `qr.ts`, `image-memory.ts`): every image command (GS v 0, ESC *, FS q/p, GS */ /, GS ( L, GS 8 L) and QR (GS ( k cn 49) becomes a `ReceiptLine.image` (`kind`, `widthDots`, `heightDots`, base64 packed rows MSB first), cut at the print area, drawn by the viewer on a canvas at 0.05em per dot. ESC * bands on consecutive lines are merged into one image. NV images live in an `ImageMemory` shared by all connections of one printer. QR encoding uses the `qrcode-generator` dependency
 - **Graceful unknown command handling**: Logs warning, skips 1 byte for ESC prefix, immediate return for GS/FS — so GS commands with parameters must be listed explicitly, or their parameter bytes are printed as text
 
 ## Known Limitations
 
 - Code pages outside `code-tables.ts` decode as ISO 8859-15
 - No bidirectional communication (DLE/ENQ status responses not implemented)
-- Images and QR codes are skipped (not rendered); barcodes other than CODE128 show their data only
+- PDF417 is shown as text; barcodes other than CODE128 show their data only
+- NV images are kept in memory only, lost when the emulator restarts
 - Line spacing (ESC 3) is parsed but not applied to the preview
 - No cash drawer pulse emulation (ESC p parsed but no-op)
 - Italics (ESC 4/5) not implemented — likely deprecated in modern ESC/POS, not used by Epson TM series
