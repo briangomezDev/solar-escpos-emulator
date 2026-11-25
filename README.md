@@ -17,6 +17,8 @@
   as text.
 - `npm test` with unit tests for the new commands.
 
+The full list of changes (in Spanish) is in [CHANGELOG.md](./CHANGELOG.md).
+
 ![ESC/POS Emulator](./assets/escpos_emulator.jpg)
 
 A lightweight ESC/POS thermal receipt printer emulator for development and testing. Receives raw ESC/POS byte streams over TCP (like a real printer), parses them, and provides:

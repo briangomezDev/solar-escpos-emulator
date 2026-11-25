@@ -44,6 +44,10 @@ src/
 - **Runtime deps** — `ws` for WebSocket, `qrcode-generator` for QR codes
 - ESM modules (`"type": "module"`), TypeScript strict mode, ES2022 target
 
+## Changes from upstream
+
+See `CHANGELOG.md` (Spanish) for everything this fork changed from lezram/escpos-emulator 0.3.0.
+
 ## Printer models
 
 `PRINTER_MODEL=TM-M30III` (default) or `2C-POS80` (aliases `POS-80`, `2CONNECT-POS80`): 2Connect 2C-POS80 series,
